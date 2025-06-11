@@ -1,0 +1,56 @@
+# AI Instructor Agent - Python Dependencies
+# Requirements for the Python backend server
+
+# Core computer vision and screenshot capture
+opencv-python==4.8.1.78
+pyautogui==0.9.54
+Pillow==10.0.1
+
+# OCR (Optical Character Recognition)
+pytesseract==0.3.10
+
+# UI automation and window management
+pywinauto==0.6.8
+
+# Global hotkey monitoring
+keyboard==0.13.5
+
+# Web framework for REST API
+Flask==2.3.3
+Flask-CORS==4.0.0
+
+# HTTP requests
+requests==2.31.0
+
+# Google Generative AI (Gemini)
+google-generativeai==0.3.2
+
+# Database
+sqlite3  # Built-in with Python
+
+# Utilities
+numpy==1.24.3
+pandas==2.0.3  # Per analytics avanzate
+
+# Optional - per funzionalità avanzate
+# scikit-learn==1.3.0  # Per ML pattern recognition
+# matplotlib==3.7.2    # Per grafici analytics
+
+# Development e debugging
+python-dotenv==1.0.0  # Per gestione variabili ambiente
+
+# Note per l'installazione:
+# 
+# Windows:
+# pip install -r requirements_v2.txt
+# 
+# Installazione Tesseract separata richiesta:
+# https://github.com/UB-Mannheim/tesseract/wiki
+# 
+# Linux (Ubuntu/Debian):
+# sudo apt-get install tesseract-ocr
+# pip install -r requirements_v2.txt
+# 
+# macOS:
+# brew install tesseract
+# pip install -r requirements_v2.txt

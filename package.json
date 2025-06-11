@@ -1,0 +1,56 @@
+{
+  "name": "ai-instructor-agent",
+  "version": "1.0.0",
+  "description": "AI-powered desktop instructor that monitors user activity and provides real-time guidance using computer vision and Google Gemini AI",
+  "main": "src/main.js",
+  "homepage": "https://github.com/ReCinzione/skill-reboot#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ReCinzione/skill-reboot.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ReCinzione/skill-reboot/issues"
+  },
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build": "electron-builder",
+    "install-python-deps": "pip install -r python/requirements.txt",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "electron",
+    "ai",
+    "instructor",
+    "training",
+    "desktop",
+    "computer-vision",
+    "ocr",
+    "gemini",
+    "automation",
+    "productivity"
+  ],
+  "author": "ReCinzione",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^27.0.0",
+    "electron-builder": "^24.6.4"
+  },
+  "dependencies": {
+    "@google/genai": "^1.4.0",
+    "axios": "^1.5.0",
+    "electron-store": "^8.1.0"
+  },
+  "build": {
+    "appId": "com.yourcompany.ai-instructor",
+    "productName": "AI Instructor Agent",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "python/**/*",
+      "node_modules/**/*"
+    ]
+  }
+}
