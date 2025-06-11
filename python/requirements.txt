@@ -10,7 +10,7 @@ Pillow==10.0.1
 pytesseract==0.3.10
 
 # UI automation and window management
-pywinauto==0.6.8
+# pywinauto==0.6.8 # Commented out for non-Windows environment compatibility
 
 # Global hotkey monitoring
 keyboard==0.13.5
@@ -26,7 +26,7 @@ requests==2.31.0
 google-generativeai==0.3.2
 
 # Database
-sqlite3  # Built-in with Python
+# sqlite3  # Built-in with Python, should not be in requirements for pip
 
 # Utilities
 numpy==1.24.3

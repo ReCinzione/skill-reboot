@@ -1,4 +1,8 @@
 const { app, BrowserWindow, ipcMain, globalShortcut } = require('electron');
+
+// Disable hardware acceleration to potentially mitigate GPU issues
+app.disableHardwareAcceleration();
+
 const { spawn } = require('child_process');
 const path = require('path');
 const Store = require('electron-store');
