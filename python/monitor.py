@@ -51,14 +51,7 @@ import cv2
 import google.generativeai as genai
 import keyboard  # Per hotkey globali
 import numpy as np
-
-try:
-    import pyautogui
-except Exception as e:  # Catching a broader range of exceptions during import
-    logger.warning(f"PyAutoGUI could not be imported due to: {e}. Screenshot functionality will be disabled.")
-    pyautogui = None  # Ensure pyautogui is defined so checks don't cause NameError
-
-# import pywinauto # Already commented out
+# Problematic pyautogui import block removed. The correct one is further down, after logger setup.
 import pytesseract
 from flask import Flask, jsonify, request
 from flask_cors import CORS
@@ -91,6 +84,35 @@ class AdvancedScreenMonitor:
             'suggestions_dismissed': 0,
             'f12_activations': 0
         }
+        self._load_api_key_from_db()
+
+    def _load_api_key_from_db(self):
+        """Carica l'API key di Gemini dal database locale."""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute("SELECT value FROM user_config WHERE key = 'gemini_api_key'")
+            row = cursor.fetchone()
+            conn.close()
+            if row and row[0]:
+                logger.info("API key Gemini caricata dal database.")
+                self.setup_gemini(row[0])
+            else:
+                logger.info("Nessuna API key Gemini trovata nel database.")
+        except Exception as e:
+            logger.error(f"Errore durante il caricamento dell'API key dal DB: {e}", exc_info=True)
+
+    def _save_api_key_to_db(self, api_key: str):
+        """Salva l'API key di Gemini nel database locale."""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute("INSERT OR REPLACE INTO user_config (key, value) VALUES ('gemini_api_key', ?)", (api_key,))
+            conn.commit()
+            conn.close()
+            logger.info("API key Gemini salvata nel database.")
+        except Exception as e:
+            logger.error(f"Errore durante il salvataggio dell'API key nel DB: {e}", exc_info=True)
 
     def init_local_db(self):
         """Inizializza database locale SQLite."""
@@ -140,15 +162,19 @@ class AdvancedScreenMonitor:
             self.gemini_api_key = api_key
             genai.configure(api_key=api_key)
             # Usa Gemini 2.0 Flash per multimodale
-            self.gemini_model = genai.GenerativeModel('gemini-2.0-flash-exp')
+            self.gemini_model = genai.GenerativeModel('gemini-2.0-flash-exp') # Model must be set before test call
+
             # Test di connessione
-            test_response = self.gemini_model.generate_content("Ciao, sei funzionante?")
+            test_response = self.gemini_model.generate_content("Ciao, sei funzionante?") # Test call
             logger.info(
                 f"Gemini configurato correttamente: {test_response.text[:50]}..."  # noqa: E501
             )
-            return True
-        except Exception:  # noqa: E722
+            self._save_api_key_to_db(api_key) # Save the key only if test call is successful
+            return True # Return True on full success
+
+        except Exception: # Catches errors from configure, GenerativeModel, or generate_content
             logger.error("Errore configurazione Gemini", exc_info=True)
+            self.gemini_model = None # Ensure model is None if setup fails
             return False
 
     def start_hotkey_monitoring(self):
