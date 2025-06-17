@@ -1,7 +1,12 @@
 const { app, BrowserWindow, ipcMain, globalShortcut } = require('electron');
+
+// Disable hardware acceleration to potentially mitigate GPU issues
+app.disableHardwareAcceleration();
+
 const { spawn } = require('child_process');
 const path = require('path');
 const Store = require('electron-store');
+const axios = require('axios'); // Added axios
 
 // Store per configurazioni persistenti
 const store = new Store();
@@ -10,6 +15,55 @@ let mainWindow;
 let overlayWindow;
 let pythonProcess;
 let isMonitoring = false;
+
+async function checkPythonServerStatus(maxAttempts = 15, interval = 1000) {
+    console.log('Checking Python server status...');
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('python-status-update', {
+                status: 'starting',
+                message: `Attempting to connect to Python server (${attempt}/${maxAttempts})...`
+            });
+        }
+        try {
+            const response = await axios.get('http://localhost:5001/status', { timeout: interval - 100 });
+            if (response.status === 200 && response.data) {
+                if (response.data.gemini_configured === true) {
+                    console.log('Python server is ready and Gemini is configured.');
+                    if (mainWindow && !mainWindow.isDestroyed()) {
+                        mainWindow.webContents.send('python-status-update', {
+                            status: 'ready',
+                            message: 'Python server ready and AI configured.'
+                        });
+                    }
+                    return true;
+                } else {
+                    console.log('Python server is up but Gemini not yet configured. Retrying attempt ' + attempt);
+                    if (mainWindow && !mainWindow.isDestroyed()) {
+                        mainWindow.webContents.send('python-status-update', {
+                            status: 'starting',
+                            message: 'Python server detected, configuring AI...'
+                        });
+                    }
+                    // Continue to retry if Gemini not yet configured, up to maxAttempts
+                }
+            }
+        } catch (error) {
+            console.log(`Python server status check failed (attempt ${attempt}/${maxAttempts}): ${error.message}. Retrying...`);
+        }
+        if (attempt < maxAttempts) {
+            await new Promise(resolve => setTimeout(resolve, interval));
+        }
+    }
+    console.log(`Python server did not become fully ready after ${maxAttempts} attempts.`);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('python-status-update', {
+            status: 'error',
+            message: 'Python server failed to start, configure, or is unresponsive.'
+        });
+    }
+    return false;
+}
 
 // Crea la finestra principale
 function createMainWindow() {
@@ -27,12 +81,13 @@ function createMainWindow() {
 
     mainWindow.loadFile(path.join(__dirname, 'renderer/index.html'));
 
-    mainWindow.once('ready-to-show', () => {
+    mainWindow.once('ready-to-show', async () => { // made async
         mainWindow.show();
         
         // Avvia automaticamente il backend Python
         console.log('🚀 Avvio automatico del backend Python...');
-        startPythonProcess();
+        startPythonProcess(); // This just spawns
+        await checkPythonServerStatus(); // Now we check status and inform UI
     });
 
     mainWindow.on('closed', () => {
@@ -84,6 +139,12 @@ function createOverlayWindow() {
 
 // Avvia il processo Python
 function startPythonProcess() {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('python-status-update', {
+            status: 'starting',
+            message: 'Python process starting...'
+        });
+    }
     const pythonPath = path.join(__dirname, '../python/monitor.py');
     
     pythonProcess = spawn('python', [pythonPath], {
@@ -152,12 +213,18 @@ function startPythonProcess() {
 // Gestori IPC
 ipcMain.handle('start-monitoring', async (event, config) => {
     try {
-        const axios = require('axios');
-        
+        let pythonReady = false;
         if (!pythonProcess) {
-            startPythonProcess();
-            // Aspetta che il server Python sia pronto
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            console.log("Python process not running. Starting it now for 'start-monitoring'.");
+            startPythonProcess(); // Spawns the process
+            pythonReady = await checkPythonServerStatus(); // Check its status
+        } else {
+            console.log("Python process already running. Checking status for 'start-monitoring'.");
+            pythonReady = await checkPythonServerStatus(); // Check status of already running process
+        }
+
+        if (!pythonReady) {
+            return { success: false, error: 'Python backend is not ready or failed to configure.' };
         }
         
         // Avvia il monitoraggio hotkey
@@ -175,7 +242,9 @@ ipcMain.handle('start-monitoring', async (event, config) => {
             
             return { success: true, message: 'Monitoraggio F12 avviato' };
         } else {
-            return { success: false, error: 'Errore avvio monitoraggio' };
+            // Pass Python's error message to the UI if available
+            const errorMessage = response.data.message || 'Errore avvio monitoraggio (dettagli non disponibili)';
+            return { success: false, error: errorMessage };
         }
         
     } catch (error) {
@@ -186,7 +255,7 @@ ipcMain.handle('start-monitoring', async (event, config) => {
 
 ipcMain.handle('stop-monitoring', async () => {
     try {
-        const axios = require('axios');
+        // const axios = require('axios'); // Already at top
         
         // Ferma il monitoraggio hotkey
         const response = await axios.post('http://localhost:5001/stop_hotkey');
@@ -201,7 +270,8 @@ ipcMain.handle('stop-monitoring', async () => {
             
             return { success: true, message: 'Monitoraggio fermato' };
         } else {
-            return { success: false, error: 'Errore stop monitoraggio' };
+            const errorMessage = response.data.message || 'Errore stop monitoraggio (dettagli non disponibili)';
+            return { success: false, error: errorMessage };
         }
         
     } catch (error) {
@@ -212,7 +282,7 @@ ipcMain.handle('stop-monitoring', async () => {
 
 ipcMain.handle('manual-test', async (event, testData) => {
     try {
-        const axios = require('axios');
+        // const axios = require('axios'); // Already at top
         
         // Invia richiesta di test manuale al backend Python
         const response = await axios.post('http://localhost:5001/manual_suggestion', {
@@ -229,7 +299,7 @@ ipcMain.handle('manual-test', async (event, testData) => {
 // Handler per feedback utente dall'overlay
 ipcMain.on('suggestion-action', async (event, feedbackData) => {
     try {
-        const axios = require('axios');
+        // const axios = require('axios'); // Already at top
         
         // Invia feedback al backend Python
         const response = await axios.post('http://localhost:5001/feedback', {
@@ -251,9 +321,25 @@ ipcMain.on('suggestion-action', async (event, feedbackData) => {
 });
 
 ipcMain.handle('get-monitoring-status', async () => {
+    let pythonStatusData = {
+        gemini_configured: false,
+        hotkey_active: false,
+    };
+    let pythonResponsive = false;
+    try {
+        const response = await axios.get('http://localhost:5001/status', { timeout: 500 });
+        if (response.status === 200 && response.data) {
+            pythonStatusData = response.data;
+            pythonResponsive = true;
+        }
+    } catch (e) {
+        console.log('Could not fetch Python status for get-monitoring-status:', e.message);
+    }
     return {
-        isMonitoring,
+        isMonitoring: pythonStatusData.hotkey_active || isMonitoring, // Prefer Python's view
         pythonProcessRunning: pythonProcess !== null,
+        pythonServerResponsive: pythonResponsive,
+        geminiConfigured: pythonStatusData.gemini_configured,
         overlayVisible: overlayWindow && overlayWindow.isVisible()
     };
 });
@@ -319,7 +405,7 @@ ipcMain.handle('show-overlay', async () => {
 });
 
 // Inizializzazione app
-app.whenReady().then(() => {
+app.whenReady().then(async () => { // Make async
     createMainWindow();
     
     // Registra hotkey globale F12
@@ -338,6 +424,9 @@ app.whenReady().then(() => {
         }
     });
     
+    // Note: startPythonProcess is now called from mainWindow's 'ready-to-show' event,
+    // which also calls checkPythonServerStatus.
+
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) {
             createMainWindow();
